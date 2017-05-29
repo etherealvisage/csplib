@@ -170,10 +170,9 @@ public:
     const Timestamp &begin() const { return m_begin; }
 
     void add(Event *event) {
-        // TODO: replace with more efficient version than this?
-        m_events.push_back(event);
-        std::stable_sort(m_events.begin(), m_events.end(),
+        auto it = std::lower_bound(m_events.begin(), m_events.end(), event,
             [] (Event *a, Event *b) { return *a < *b; });
+        m_events.insert(it, event);
     }
 
     void setStage(Stage &&stage) { m_stage = std::move(stage); }
