@@ -180,12 +180,6 @@ public:
     void setStage(Stage &&stage) { m_stage = std::move(stage); }
 
     const std::vector<Event *> &events() const { return m_events; }
-
-    void dump(std::ostream &stream) {
-        stream << "snapshot " << (void*)this
-            << " has " << m_stage.size() << " actors and "
-            << m_events.size() << " events\n";
-    }
 };
 
 class Timeline {
@@ -215,25 +209,20 @@ public:
         else {
             // reassemble all succeeding snapshots
             for(unsigned i = closestIndex; i < m_snapshots.size(); i ++) {
-                std::cout << "recalculate snapshot " << i << std::endl;
                 auto stage = Stage(m_snapshots[i].stage());  // deep copy
                 for(auto event : m_snapshots[i].events()) {
                     event->apply(stage);
                 }
                 if(i + 1 < m_snapshots.size()) {
+                    // save results in next snapshot's base Stage
                     m_snapshots[i+1].setStage(std::move(stage));
                 }
                 else {
+                    // save results in our latest Stage
                     m_stage = std::move(stage);
                 }
             }
         }
-
-        for(auto snapshot : m_snapshots) {
-            std::cout << "    ";
-            snapshot.dump(std::cout);
-        }
-        std::cout << "    latest stage has " << m_stage.size() << " actors\n";
 
         return true;
     }
@@ -257,11 +246,9 @@ private:
             if(event->when() < m_snapshots[i].begin()
                 /*|| event->when() == m_snapshots[i].begin()*/) {
 
-                std::cout << "event " << event->when().raw() << " inside INDEX " << i-1 << std::endl;
                 return i - 1;
             }
         }
-        std::cout << "event " << event->when().raw() << " inside INDEX " << size-1 << std::endl;
         return size - 1;
     }
 
