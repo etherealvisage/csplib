@@ -63,7 +63,7 @@ public:
             result.m_actors[actor.first] = actor.second->clone();
         }
 
-        return result;
+        return std::move(result);
     }
 
     void destroy() {
@@ -109,15 +109,11 @@ public:
 
     virtual bool apply(ActorRegistry &registry) {
         bool value = m_event->apply(registry);
-        if(m_first) {
-            m_first = false;
-            m_lastValue = value;
+        if(m_first || value != m_lastValue) {
             m_callback(m_event->target(), value);
         }
-        else if(value != m_lastValue) {
-            m_callback(m_event->target(), value);
-            m_lastValue = value;
-        }
+        m_first = false;
+        m_lastValue = value;
 
         return true; // this event always succeeds
     }
