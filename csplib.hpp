@@ -45,7 +45,7 @@ private:
     std::map<ActorID, Actor *> m_actors;
 public:
     Stage() {}
-    Stage(const Stage &other) {
+    explicit Stage(const Stage &other) {
         for(auto it : other.m_actors) {
             add(it.second->clone());
         }
@@ -60,9 +60,7 @@ public:
     Stage &operator = (Stage &&other) = default;
 
     void add(Actor *actor) { m_actors[actor->id()] = actor; }
-    void remove(ActorID id) {
-        m_actors.erase(m_actors.find(id));  // does this work if id not present?
-    }
+    void remove(ActorID id) { m_actors.erase(m_actors.find(id)); }
     Actor *get(ActorID id) {
         auto it = m_actors.find(id);
         return (it != m_actors.end() ? (*it).second : nullptr);
@@ -71,6 +69,7 @@ public:
         auto it = m_actors.find(id);
         return (it != m_actors.end() ? (*it).second : nullptr);
     }
+    size_t size() const { return m_actors.size(); }
 };
 
 class Timestamp {
@@ -85,6 +84,7 @@ public:
     bool operator == (const Timestamp &other) const {
         return m_raw == other.m_raw;
     }
+    uint64_t raw() const { return m_raw; }
 
     static Timestamp makeZero() {
         return Timestamp(0);
@@ -169,51 +169,78 @@ public:
     const Stage &stage() const { return m_stage; }
     const Timestamp &begin() const { return m_begin; }
 
-    void add(Event *event) {
+    /** Returns true if this event was added later than all others. */
+    bool add(Event *event) {
         auto it = std::lower_bound(m_events.begin(), m_events.end(), event,
             [] (Event *a, Event *b) { return *a < *b; });
         m_events.insert(it, event);
+        return it == m_events.end();
     }
 
     void setStage(Stage &&stage) { m_stage = std::move(stage); }
 
     const std::vector<Event *> &events() const { return m_events; }
+
+    void dump(std::ostream &stream) {
+        stream << "snapshot " << (void*)this
+            << " has " << m_stage.size() << " actors and "
+            << m_events.size() << " events\n";
+    }
 };
 
 class Timeline {
 private:
     std::vector<StageSnapshot> m_snapshots;
+    Stage m_stage;
 public:
     Timeline() {
         // First snapshot is so old, it's before everything
         m_snapshots.push_back(StageSnapshot(Timestamp::makeZero()));
     }
 
-    Stage &stage() { return latest().stage(); }
-    const Stage &stage() const { return latest().stage(); }
+    Stage &stage() { return m_stage; }
+    const Stage &stage() const { return m_stage; }
 
     bool add(Event *event) {
         int closestIndex = indexOf(event);
         if(closestIndex == -1) return false;  // older than oldest snapshot
 
         // insert into snapshot
-        m_snapshots[closestIndex].add(event);
+        bool lastAdded = m_snapshots[closestIndex].add(event);
 
-        // now we need to reassemble all future snapshots
-        for(unsigned i = closestIndex; i < m_snapshots.size(); i ++) {
-            auto stage = m_snapshots[closestIndex].stage();  // deep copy
-            for(auto event : m_snapshots[i].events()) {
-                event->apply(stage);
-            }
-            m_snapshots[i].setStage(std::move(stage));
+        if(closestIndex + 1u == m_snapshots.size() && lastAdded) {
+            // no rewriting of history
+            event->apply(m_stage);
         }
+        else {
+            // reassemble all succeeding snapshots
+            for(unsigned i = closestIndex; i < m_snapshots.size(); i ++) {
+                std::cout << "recalculate snapshot " << i << std::endl;
+                auto stage = Stage(m_snapshots[i].stage());  // deep copy
+                for(auto event : m_snapshots[i].events()) {
+                    event->apply(stage);
+                }
+                if(i + 1 < m_snapshots.size()) {
+                    m_snapshots[i+1].setStage(std::move(stage));
+                }
+                else {
+                    m_stage = std::move(stage);
+                }
+            }
+        }
+
+        for(auto snapshot : m_snapshots) {
+            std::cout << "    ";
+            snapshot.dump(std::cout);
+        }
+        std::cout << "    latest stage has " << m_stage.size() << " actors\n";
 
         return true;
     }
 
     void snapshotAt(Timestamp now) {
         // push on copy of current snapshot
-        m_snapshots.push_back(StageSnapshot(now, latest().stage()));
+        m_snapshots.push_back(StageSnapshot(now, m_stage));
     }
 
     void limitSnapshots(int count) {
@@ -228,16 +255,17 @@ private:
         // linear search for now
         for(int i = 0; i < size; i ++) {
             if(event->when() < m_snapshots[i].begin()
-                || event->when() == m_snapshots[i].begin()) {
+                /*|| event->when() == m_snapshots[i].begin()*/) {
 
+                std::cout << "event " << event->when().raw() << " inside INDEX " << i-1 << std::endl;
                 return i - 1;
             }
         }
+        std::cout << "event " << event->when().raw() << " inside INDEX " << size-1 << std::endl;
         return size - 1;
     }
 
     StageSnapshot &latest() { return m_snapshots.back(); }
-    const StageSnapshot &latest() const { return m_snapshots.back(); }
 };
 
 } // namespace csplib

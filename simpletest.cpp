@@ -17,6 +17,7 @@ public:
     CreateEvent(Timestamp when, ActorID target) : Event(when, target) {}
 
     virtual bool apply(Stage &stage) {
+        std::cout << "CREATE intState(0)\n";
         if(stage.get(target())) return false;  // abort if already exists
         stage.add(new Actor(target(), new IntState(0)));
         return true;
