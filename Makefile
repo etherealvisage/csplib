@@ -3,9 +3,13 @@
 CXX = g++
 CXXFLAGS = -std=c++11 -Wall -Wextra -g
 
-simpletest: simpletest.cpp
+.PHONY: all
+all: simpletest
+
+simpletest.o: simpletest.cpp csplib.hpp
+simpletest: simpletest.o
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
 .PHONY: clean
 clean:
-	-rm simpletest
+	-rm simpletest simpletest.o

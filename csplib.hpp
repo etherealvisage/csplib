@@ -41,7 +41,7 @@ public:
     virtual ActorState *clone() const = 0;
 };
 
-class ActorRegistry {
+class Stage {
 private:
     std::map<ActorID, ActorState *> m_actors;
 public:
@@ -56,8 +56,8 @@ public:
         return (it != m_actors.end() ? (*it).second : nullptr);
     }
 
-    ActorRegistry clone() const {
-        ActorRegistry result;
+    Stage clone() const {
+        Stage result;
 
         for(auto actor : m_actors) {
             result.m_actors[actor.first] = actor.second->clone();
@@ -84,7 +84,7 @@ public:
     const Timestamp &when() const { return m_when; }
     const ActorID &target() const { return m_target; }
 
-    virtual bool apply(ActorRegistry &registry) = 0;
+    virtual bool apply(Stage &stage) = 0;
 
     virtual bool operator < (const Event &other) const {
         return m_when < other.m_when;
@@ -107,8 +107,8 @@ public:
         : Event(event->when(), event->target()), m_event(event),
         m_first(true), m_callback(callback) {}
 
-    virtual bool apply(ActorRegistry &registry) {
-        bool value = m_event->apply(registry);
+    virtual bool apply(Stage &stage) {
+        bool value = m_event->apply(stage);
         if(m_first || value != m_lastValue) {
             m_callback(m_event->target(), value);
         }
@@ -119,20 +119,18 @@ public:
     }
 };
 
-class Stage;
-
 class StageSnapshot {
 private:
-    ActorRegistry m_registry;
+    Stage m_stage;
     std::vector<Event *> m_events;
     Timestamp m_begin;
 public:
     StageSnapshot(Timestamp begin) : m_begin(begin) {}
-    StageSnapshot(Timestamp begin, const ActorRegistry &registry) :
-        m_registry(registry.clone()), m_begin(begin) {}
+    StageSnapshot(Timestamp begin, const Stage &stage) :
+        m_stage(stage.clone()), m_begin(begin) {}
 
-    ActorRegistry &registry() { return m_registry; }
-    const ActorRegistry &registry() const { return m_registry; }
+    Stage &stage() { return m_stage; }
+    const Stage &stage() const { return m_stage; }
     const Timestamp &begin() const { return m_begin; }
 
     void addEvent(Event *event) {
@@ -142,34 +140,28 @@ public:
             [](Event *a, Event *b){ return *a < *b; });
     }
 
-    void updateRegistryTo(const ActorRegistry &registry)
-        { m_registry.destroy(); m_registry = registry.clone(); }
-    void replaceRegistryWith(ActorRegistry &registry)
-        { m_registry.destroy(); m_registry = registry; }
+    void updateRegistryTo(const Stage &stage)
+        { m_stage.destroy(); m_stage = stage.clone(); }
+    void replaceRegistryWith(Stage &stage)
+        { m_stage.destroy(); m_stage = stage; }
 
     const std::vector<Event *> &events() const { return m_events; }
 };
 
-class Stage {
+class Timeline {
 private:
     std::vector<StageSnapshot> m_snapshots;
     StageSnapshot m_latest;
 public:
-    Stage() : m_latest(Timestamp::makeZero()) {
+    Timeline() : m_latest(Timestamp::makeZero()) {
         // First snapshot is so old, it's before everything
         m_snapshots.push_back(StageSnapshot(Timestamp::makeZero()));
     }
 
     const StageSnapshot &latest() const { return m_latest; }
 
-    void accept(Event *event) {
-        int closestIndex = -1;
-        for(unsigned i = 0; i < m_snapshots.size(); i ++) {
-            if(m_snapshots[i].begin() < event->when()) {
-                closestIndex = i;
-            }
-            else break;
-        }
+    void add(Event *event) {
+        int closestIndex = indexOf(event);
         if(closestIndex == -1) {
             // event is too old for us.
             return;
@@ -179,24 +171,23 @@ public:
         m_snapshots[closestIndex].addEvent(event);
 
         // now we need to reassemble all future snapshots
-        ActorRegistry areg =
-            m_snapshots[closestIndex].registry().clone();
+        auto stage = m_snapshots[closestIndex].stage().clone();
         for(unsigned i = closestIndex+1; i < m_snapshots.size(); i ++) {
             for(auto event : m_snapshots[i-1].events()) {
-                event->apply(areg);
+                event->apply(stage);
             }
-            m_snapshots[i].updateRegistryTo(areg);
+            m_snapshots[i].updateRegistryTo(stage);
         }
         // handle last snapshot specially, because it updates the current
         for(auto event : m_snapshots.back().events()) {
-            event->apply(areg);
+            event->apply(stage);
         }
-        m_latest.replaceRegistryWith(areg);
+        m_latest.replaceRegistryWith(stage);
     }
 
     void makeNewSnapshot(Timestamp now) {
         // push on copy of current snapshot
-        m_snapshots.push_back(StageSnapshot(now, m_latest.registry()));
+        m_snapshots.push_back(StageSnapshot(now, m_latest.stage()));
     }
 
     void limitSnapshots(int count) {
@@ -204,6 +195,18 @@ public:
         if(m_snapshots.size() <= (unsigned)count) return;
         int delta = m_snapshots.size() - count;
         m_snapshots.erase(m_snapshots.begin(), m_snapshots.begin()+delta);
+    }
+private:
+    int indexOf(Event *event) const {
+        int size = static_cast<int>(m_snapshots.size());
+        for(int i = 0; i < size; i ++) {
+            if(event->when() < m_snapshots[i].begin()
+                || event->when() == m_snapshots[i].begin()) {
+
+                return i - 1;
+            }
+        }
+        return size - 1;
     }
 };
 
