@@ -190,7 +190,8 @@ public:
         m_snapshots.push_back(StageSnapshot(Timestamp::makeZero()));
     }
 
-    const StageSnapshot &latest() const { return m_snapshots.back(); }
+    Stage &stage() { return latest().stage(); }
+    const Stage &stage() const { return latest().stage(); }
 
     bool add(Event *event) {
         int closestIndex = indexOf(event);
@@ -235,6 +236,9 @@ private:
         }
         return size - 1;
     }
+
+    StageSnapshot &latest() { return m_snapshots.back(); }
+    const StageSnapshot &latest() const { return m_snapshots.back(); }
 };
 
 } // namespace csplib
