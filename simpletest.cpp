@@ -53,13 +53,13 @@ int main() {
     timeline.add(new DoubleEvent(Timestamp(1008), 101));
 
     auto is = dynamic_cast<const IntState *>(timeline.stage().get(101)->state());
-    std::cout << "Before rollback & increment: " << is->value << std::endl;
+    std::cout << "Before rollback & increment (should be 0): " << is->value << std::endl;
 
     // insert increment in between creation and doubling events
     timeline.add(new IncrementEvent(Timestamp(1007), 101));
 
     is = dynamic_cast<const IntState *>(timeline.stage().get(101)->state());
-    std::cout << "After rollback & increment: " << is->value << std::endl;
+    std::cout << "After  rollback & increment (should be 2): " << is->value << std::endl;
 
     timeline.snapshotAt(Timestamp(1010));
     timeline.snapshotAt(Timestamp(1020));
@@ -68,7 +68,7 @@ int main() {
     timeline.add(new IncrementEvent(Timestamp(1009), 100));
 
     is = dynamic_cast<const IntState *>(timeline.stage().get(100)->state());
-    std::cout << "After rollback & increment (100): " << is->value << std::endl;
+    std::cout << "After  rollback & increment (should be 1): " << is->value << std::endl;
 
     return 0;
 }

@@ -50,10 +50,7 @@ public:
             add(it.second->clone());
         }
     }
-    Stage(Stage &&other) {
-        m_actors = other.m_actors;
-        other.m_actors.clear();
-    }
+    Stage(Stage &&other) : m_actors(std::move(other.m_actors)) {}
     ~Stage() { for(auto it : m_actors) delete it.second; }
 
     Stage &operator = (const Stage &other) = delete;
@@ -188,7 +185,7 @@ private:
     Stage m_stage;
 public:
     Timeline() {
-        // First snapshot is so old, it's before everything
+        // first snapshot is so old, it's before everything
         m_snapshots.push_back(StageSnapshot(Timestamp::makeZero()));
     }
 
