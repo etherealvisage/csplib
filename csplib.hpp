@@ -16,14 +16,11 @@ private:
 public:
     Timestamp(uint64_t raw) : m_raw(raw) {}
 
-    int compare(const Timestamp &other) const {
-        if(m_raw < other.m_raw) return -1;
-        if(m_raw > other.m_raw) return 1;
-        return 0;
-    }
-
-    bool operator<(const Timestamp &other) const {
+    bool operator < (const Timestamp &other) const {
         return m_raw < other.m_raw;
+    }
+    bool operator == (const Timestamp &other) const {
+        return m_raw == other.m_raw;
     }
 
     static Timestamp makeZero() {
@@ -50,11 +47,13 @@ private:
 public:
     void setMapping(ActorID id, ActorState *actor) { m_actors[id] = actor; }
     void clearMapping(ActorID id) { m_actors.erase(m_actors.find(id)); }
-    ActorState *find(ActorID id) { return m_actors[id]; }
+    ActorState *find(ActorID id) {
+        auto it = m_actors.find(id);
+        return (it != m_actors.end() ? (*it).second : nullptr);
+    }
     const ActorState *find(ActorID id) const {
         auto it = m_actors.find(id);
-        if(it != m_actors.end()) return it->second;
-        return nullptr;
+        return (it != m_actors.end() ? (*it).second : nullptr);
     }
 
     ActorRegistry clone() const {
@@ -86,12 +85,12 @@ public:
     const ActorID &target() const { return m_target; }
 
     virtual bool apply(ActorRegistry &registry) = 0;
-    virtual bool compare(const Event &event) const {
-        return m_when < event.m_when;
-    }
 
-    bool operator<(const Event &other) const {
-        return compare(other);
+    virtual bool operator < (const Event &other) const {
+        return m_when < other.m_when;
+    }
+    virtual bool operator == (const Event &other) const {
+        return m_when == other.m_when;
     }
 };
 

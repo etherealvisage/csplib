@@ -6,12 +6,10 @@ using namespace csplib;
 
 class IntState : public ActorState {
 public:
-    IntState(int v) : value(v) {}
     int value;
+    IntState(int v) : value(v) {}
 
-    IntState *clone() const {
-        return new IntState(value);
-    }
+    IntState *clone() const { return new IntState(value); }
 };
 
 class CreateEvent : public Event {
