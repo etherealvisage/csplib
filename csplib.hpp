@@ -201,8 +201,9 @@ public:
     bool add(Event *event) {
         auto it = std::lower_bound(m_events.begin(), m_events.end(), event,
             [] (Event *a, Event *b) { return *a < *b; });
+        bool last = it == m_events.end();
         m_events.insert(it, event);
-        return it == m_events.end();
+        return last;
     }
 
     void setStage(Stage &&stage) { m_stage = std::move(stage); }
